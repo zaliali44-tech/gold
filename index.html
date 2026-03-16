@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Gold Signal Engine V2.1</title>
+<title>Gold Signal Engine 2.2</title>
 
 <style>
 
@@ -81,14 +81,12 @@ height:650px;
 
 <div class="container">
 
-<h1>Gold Signal Engine 2.1</h1>
+<h1>Gold Signal Engine 2.2</h1>
 
 <div class="grid">
 
 <div class="card">
-
 <div id="tvchart"></div>
-
 </div>
 
 <div>
@@ -97,8 +95,9 @@ height:650px;
 
 <h3>API Key</h3>
 
-<input id="api" placeholder="Paste TwelveData API Key">
+<input id="api" placeholder="Paste TwelveData API key">
 
+<button onclick="saveKey()">Save API</button>
 <button onclick="run()">Run Analysis</button>
 
 </div>
@@ -139,6 +138,22 @@ height:650px;
 
 </div>
 
+<div class="card">
+
+<h3>Predictions</h3>
+
+<div class="metric">15m Move Probability:</div>
+<div class="metric">Bullish: <span id="bull15"></span></div>
+<div class="metric">Bearish: <span id="bear15"></span></div>
+
+<div class="metric">1 Hour Direction:</div>
+<div class="metric"><span id="dir1h"></span></div>
+
+<div class="metric">Volatility Expansion:</div>
+<div class="metric"><span id="volatilityexp"></span></div>
+
+</div>
+
 </div>
 
 </div>
@@ -158,6 +173,26 @@ style:"1",
 container_id:"tvchart"
 })
 
+window.onload=function(){
+
+let key=localStorage.getItem("gold_api")
+
+if(key){
+document.getElementById("api").value=key
+}
+
+}
+
+function saveKey(){
+
+const key=document.getElementById("api").value
+
+localStorage.setItem("gold_api",key)
+
+alert("API key saved")
+
+}
+
 function ema(data,p){
 
 let k=2/(p+1)
@@ -167,6 +202,17 @@ for(let i=1;i<data.length;i++)
 ema=data[i]*k+ema*(1-k)
 
 return ema
+
+}
+
+function atr(data){
+
+let total=0
+
+for(let i=1;i<15;i++)
+total+=data[i].high-data[i].low
+
+return total/14
 
 }
 
@@ -187,23 +233,6 @@ else losses+=Math.abs(diff)
 let rs=gains/losses
 
 return 100-(100/(1+rs))
-
-}
-
-function atr(data){
-
-let total=0
-
-for(let i=1;i<15;i++){
-
-let high=data[i].high
-let low=data[i].low
-
-total+=high-low
-
-}
-
-return total/14
 
 }
 
@@ -252,27 +281,19 @@ return "Sideways"
 
 }
 
-function support(data){
-
-let lows=data.slice(-30).map(x=>x.low)
-
-return Math.min(...lows)
-
-}
-
-function resistance(data){
-
-let highs=data.slice(-30).map(x=>x.high)
-
-return Math.max(...highs)
-
-}
-
 function probability(score){
 
 let base=50
 
 return Math.min(95,Math.max(5,base+score*5))
+
+}
+
+function volatilityState(atrValue){
+
+if(atrValue>12)return "High"
+if(atrValue>7)return "Expanding"
+return "Low"
 
 }
 
@@ -337,10 +358,13 @@ let m15=await candles("15min")
 let h1=await candles("1h")
 let h4=await candles("4h")
 
+let closes15=m15.map(x=>x.close)
+
 let tf15={
 trend:trend(m15),
 price:m15[m15.length-1].close,
-atr:atr(m15)
+atr:atr(m15),
+rsi:rsi(closes15)
 }
 
 let tf1={
@@ -351,8 +375,7 @@ atr:atr(h1)
 
 let tf4={
 trend:trend(h4),
-price:h4[h4.length-1].close,
-atr:atr(h4)
+price:h4[h4.length-1].close
 }
 
 let d=decision(tf15,tf1,tf4)
@@ -377,6 +400,19 @@ document.getElementById("trend1").innerText=tf1.trend
 document.getElementById("session").innerText=session()
 
 document.getElementById("volatility").innerText=tf1.atr.toFixed(2)
+
+document.getElementById("volatilityexp").innerText=volatilityState(tf1.atr)
+
+let bullProb=50+(tf15.rsi-50)
+
+bullProb=Math.max(5,Math.min(95,bullProb))
+
+let bearProb=100-bullProb
+
+document.getElementById("bull15").innerText=bullProb.toFixed(0)+"%"
+document.getElementById("bear15").innerText=bearProb.toFixed(0)+"%"
+
+document.getElementById("dir1h").innerText=tf1.trend
 
 }
 
